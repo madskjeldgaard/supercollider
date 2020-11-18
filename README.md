@@ -1,4 +1,4 @@
-[SuperCollider](https://supercollider.github.io/) [![Build Status](https://travis-ci.org/supercollider/supercollider.svg?branch=master)](https://travis-ci.org/supercollider/supercollider) [![Appveyor](https://ci.appveyor.com/api/projects/status/github/supercollider/supercollider?branch=develop&svg=true)](https://ci.appveyor.com/project/brianlheim/supercollider-mu8dk)
+[SuperCollider](https://supercollider.github.io/) [![Build Status](https://travis-ci.org/supercollider/supercollider.svg?branch=develop)](https://travis-ci.org/supercollider/supercollider) [![Appveyor](https://ci.appveyor.com/api/projects/status/github/supercollider/supercollider?branch=develop&svg=true)](https://ci.appveyor.com/project/supercollider/supercollider)
 =========================
 
 **SuperCollider** is a platform for audio synthesis and algorithmic composition, used by musicians, artists, and researchers working with sound. It consists of:
@@ -10,7 +10,7 @@
 
 sclang comes with its own package manager, called Quarks. scsynth and supernova both support third-party plugins via C and C++ APIs.
 
-SuperCollider is written in C++11 using several third-party libraries, including Qt and Boost.
+SuperCollider is written in C++11 using several third-party libraries, including Qt and Boost. It can be used on Windows, macOS, a variety of Linux and BSD distributions, Raspberry Pi, and BeagleBone Black.
 
 Install
 -------
@@ -19,12 +19,38 @@ macOS and Windows builds for stable releases are provided at our [downloads page
 
 To get the latest stable version, Linux users will need to build SuperCollider themselves. See the [Linux README](README_LINUX.md) for instructions.
 
+See the [Raspberry Pi](README_RASPBERRY_PI.md) and [BeagleBone Black](README_BEAGLEBONE_BLACK.md) READMEs for instructions on building on those platforms.
+
 [downloads page]: https://supercollider.github.io/download
 
-### Platform requirements
+### Platform support
 
-The minimum supported version of macOS is 10.10 Yosemite; the minimum supported version of Windows
-is Windows Vista.
+SuperCollider is tested with:
+- Windows 10 (32- and 64-bit) and MSVC 2017
+- macOS 10.13 with Xcode 9.4 and Xcode 10.1
+- Ubuntu 14.04 and gcc 4.9
+
+SuperCollider is known to support these platforms:
+- Windows Vista, 7, 8, and 10
+- macOS 10.13-10.15
+- Ubuntu 14.04-18.04
+
+We also provide a legacy macOS binary for macOS 10.10 and above using Qt 5.9.
+
+SuperCollider has guaranteed support for:
+- Windows 10
+- MSVC 2017, 2019
+- macOS 10.14-10.15
+- Xcode 10, 11
+- Debian >= 9.0
+- Ubuntu 16.04, 18.04, 20.04
+- Fedora 31, 32
+- Arch Linux
+- gcc >= 4.9
+- Qt >= 5.11
+
+For more information on platform support guarantees, see the [project
+Wiki](https://github.com/supercollider/supercollider/wiki/Platform-Support).
 
 Learn
 -----
@@ -52,7 +78,7 @@ Please read our adopted [code of conduct](CODE_OF_CONDUCT.md), which applies to 
 [sc-users archives]: https://www.listarc.bham.ac.uk/lists/sc-users/
 [sc-dev archives]: https://www.listarc.bham.ac.uk/lists/sc-dev/
 [Discourse]: https://scsynth.org/
-[Slack]: https://join.slack.com/t/scsynth/shared_invite/enQtMzk3OTY3MzE0MTAyLTFmMTliMmU0NjIwYzgyZGY1MjgxNGI2MGUxMTNlMWVhZWQzZjFmOTJhNzg2NDdmNzZmM2JiYTkyMjRiNDBiOTk
+[Slack]: https://join.slack.com/t/scsynth/shared_invite/zt-ezoyz15j-SVM7JVul94pxtDiUDRnd0w
 
 Contribute
 ----------

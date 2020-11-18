@@ -15,6 +15,26 @@ if(APPLE)
     include_directories(${CMAKE_SOURCE_DIR}/external_libraries/libsndfile)
 endif()
 
+# here we choose who provides us with the FFT lib
+# this is done independently for scsynth and supernova
+# scsynth uses vDSP implementation for FFT on macOS
+# however current implementation of vDSP is not thread-safe
+# so we use FFTW with supernova on macOS
+# once vDSP implementation becomes thread-safe
+# this logic can be reworked to use vDSP on macOS
+
+find_package(FFTW3f 3.3)
+
+if (NOT FFTW3F_FOUND OR FFT_GREEN)
+    message(STATUS "FFT library (supernova): Green")
+    set(FFT_GREEN 1)
+    add_definitions("-DSC_FFT_GREEN")
+else()
+    message(STATUS "Found fftw3f: ${FFTW3F_LIBRARY}")
+    message(STATUS "FFT library (supernova): FFTW")
+    add_definitions("-DSC_FFT_FFTW")
+endif()
+
 set(libsupernova_src
     sc/sc_synth_definition.cpp
     sc/sc_osc_handler.cpp
@@ -31,6 +51,7 @@ set(libsupernova_src
     ${CMAKE_SOURCE_DIR}/common/Samp.cpp
     ${CMAKE_SOURCE_DIR}/common/SC_fftlib.cpp
     ${CMAKE_SOURCE_DIR}/common/SC_StringParser.cpp
+    ${CMAKE_SOURCE_DIR}/common/SC_ServerBootDelayWarning.cpp
     server/buffer_manager.cpp
     server/memory_pool.cpp
     server/node_graph.cpp
@@ -65,6 +86,10 @@ endif()
 set_property(TARGET libsupernova PROPERTY CXX_STANDARD 14)
 
 
+if(CMAKE_COMPILER_IS_CLANG AND CMAKE_CXX_COMPILER_VERSION MATCHES "^[456]\\.")
+    message(STATUS "clang version is 4, 5, or 6, linking to libatomic")
+    target_link_libraries(libsupernova atomic)
+endif()
 if(NOT WIN32)
   set_property(TARGET libsupernova
                PROPERTY OUTPUT_NAME supernova)
@@ -104,29 +129,44 @@ else()
   endif()
 endif()
 
-if(APPLE OR MSYS)
-    find_package(Portaudio)
-    if(NOT PORTAUDIO_FOUND)
-        message(FATAL_ERROR "Portaudio missing")
-    endif()
-    target_compile_definitions(libsupernova PUBLIC PORTAUDIO_BACKEND ${PORTAUDIO_DEFINITIONS})
-    target_include_directories(libsupernova PUBLIC ${PORTAUDIO_INCLUDE_DIRS})
-    target_link_libraries(libsupernova ${PORTAUDIO_LIBRARIES})
-elseif (WIN32)
-    target_compile_definitions(libsupernova PUBLIC PORTAUDIO_BACKEND -DPORTAUDIO_BACKEND)
-    target_include_directories(libsupernova PUBLIC ${PORTAUDIO_INCLUDE_DIRS})
-    if(MSYS)
-        target_link_libraries(libsupernova ${PORTAUDIO_LIBRARIES})
+if(AUDIOAPI STREQUAL "default")
+    if(APPLE)
+        set(AUDIOAPI portaudio)
+    elseif(WIN32)
+        set(AUDIOAPI portaudio)
     else()
-        target_link_libraries(libsupernova portaudio)
-    endif()
-else()
+        set(AUDIOAPI jack)
+    endif(APPLE)
+endif()
+
+if(NOT AUDIOAPI MATCHES "^(jack|coreaudio|portaudio)$")
+    message(FATAL_ERROR "Unrecognized audio API: ${AUDIOAPI}")
+endif()
+
+if(AUDIOAPI STREQUAL "coreaudio")
+    set(AUDIOAPI portaudio)
+    message(FATAL_ERROR "supernova: coreaudio API not implemented yet, use 'default' or 'portaudio' instead")
+endif()
+
+if(AUDIOAPI STREQUAL jack)
+    find_package(Jack REQUIRED)
+elseif(AUDIOAPI STREQUAL portaudio AND SYSTEM_PORTAUDIO)
+    find_package(Portaudio REQUIRED)
+endif()
+message(STATUS "Audio API (supernova): ${AUDIOAPI}")
+
+if(AUDIOAPI STREQUAL jack)
     find_library(JACK NAMES jack)
-    if (JACK)
+    if(JACK)
         target_compile_definitions(libsupernova PUBLIC JACK_BACKEND)
         target_link_libraries(libsupernova ${JACK})
         target_include_directories(libsupernova PUBLIC ${JACK_INCLUDE_DIRS})
     endif()
+elseif(AUDIOAPI STREQUAL portaudio)
+    target_sources(libsupernova PUBLIC ${CMAKE_SOURCE_DIR}/common/SC_PaUtils.cpp)
+    target_include_directories(libsupernova PUBLIC ${PORTAUDIO_INCLUDE_DIRS})
+    target_compile_definitions(libsupernova PUBLIC PORTAUDIO_BACKEND ${PORTAUDIO_DEFINITIONS})
+    target_link_libraries(libsupernova ${PORTAUDIO_LIBRARIES})
 endif()
 
 find_package(Sndfile)
@@ -140,6 +180,7 @@ endif()
 if (FFTW3F_FOUND)
     target_include_directories(libsupernova PUBLIC ${FFTW3F_INCLUDE_DIR})
     target_link_libraries(libsupernova ${FFTW3F_LIBRARY})
+    set_property(TARGET libsupernova PROPERTY SUPERNOVA_FFTW ON) # for fixing linking in macdeployqt
 endif()
 
 if(CMAKE_SYSTEM_NAME MATCHES "Linux")
@@ -160,11 +201,19 @@ if(WIN32)
 endif()
 
 
-add_executable(supernova server/main.cpp ${supernova_headers})
+add_executable(supernova
+    server/main.cpp
+    ${supernova_headers}
+
+    # these files contain code only used in main()
+    ${CMAKE_SOURCE_DIR}/common/SC_ServerBootDelayWarning.cpp
+    $<$<BOOL:${APPLE}>: ${CMAKE_SOURCE_DIR}/common/SC_AppleEventLoop.mm >
+    )
 target_link_libraries(supernova libsupernova)
 
 if(WIN32)
     if(NOT MSVC)
+      target_link_libraries(supernova "-municode")
       set_target_properties(supernova libsupernova PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<CONFIG>")
     endif(NOT MSVC)
 

@@ -309,11 +309,12 @@ In order to get support for ASIO drivers, follow this directory structure:
 
     supercollider
         external_libraries
-            portaudio_sc_org
-            asiosdk
-                asio
-                common
-                ...
+            portaudio
+                portaudio_submodule
+                asiosdk
+                    asio
+                    common
+                    ...
             ...
 
 FFTW does not provide build files for Visual Studio. In the **Developer Command
@@ -453,10 +454,11 @@ of extension/Quark groups easier.
 
 ### PortAudio
 
-You can study the file `external_libraries\portaudio_sc_org\CMakeLists.txt` to
+You can study the files `external_libraries\portaudio\portaudio_submodule\CMakeLists.txt`
+and `external_libraries\portaudio\CMakeLists.txt` to
 learn about the options that the build provides. With default settings, all APIs
 that *work out of the box* are enabled and only the library for static linking
-is built. In the VS-build all APIs are enabled. For MinGW, WASAPI is ommitted
+is built. In the VS-build all APIs are enabled. For MinGW, WASAPI is omitted
 and some features of DSound's full duplex mode are unavailable.  If you would
 like to tweak the PortAudio build you can single it out from the SC build with:
 
@@ -722,8 +724,8 @@ run:
     $> cmake .. -L
 
 This will show us amongst other things, that an option to build plugin versions
-for the alternative audio server `supernova` is available (not availale in
-VS builds). To add them to the build, just run:
+for the alternative audio server `supernova` is available. To add them to the
+build, just run:
 
     $> cmake -DSUPERNOVA=ON ..
 
@@ -880,10 +882,9 @@ subsequent run regardless of whether the cache has been deleted or not. That can
 be helpful at times, and confusing in other situations.
 
 *Note*: resist the temptation to enable all options that seem promising. Some of
-them don't work in the Windows build. For example the supernova server can't be
-built with VS yet. Usually SuperCollider's default values are a considered
-choice that should only be changed for a good reason (see the walkthrough for
-"More CMake" for some options that do work).
+them don't work in the Windows build. Usually SuperCollider's default values are 
+a considered choice that should only be changed for a good reason (see the
+walkthrough for "More CMake" for some options that do work).
 
 CMake will generate a solution file in the build folder. Use it to start VS, and
 you are ready to develop and build in this feature rich IDE. If you started
@@ -1053,8 +1054,7 @@ Commonly used variables to modify the build configuration are:
 
   *Note*: When you build with supernova, an alternative server executable and
   a supernova version of each plugin is built. If you also use the 'sc3-plugins'
-  package, make sure to compile them with supernova support too. At the time
-  of this writing supernova could only be built with the MinGW toolchain.
+  package, make sure to compile them with supernova support too.
 
   Within SC you will be able to switch between scsynth and supernova by
   evaluating one of lines below and then booting the server as usual:
@@ -1071,13 +1071,6 @@ Commonly used variables to modify the build configuration are:
   anywhere in the Extensions folder (or in any "included" class folder), whereas
   the binary plugins should reside in a folder "plugins" (this mirrors the situation
   in the application directory)
-
-  *Note*: While there is no readily available 64-bit Qt version for the MinGW
-  build, supernova does not depend on Qt. Therefore a qt-less build could be
-  used to build a 64-bit version of SuperNova, and combine it with the 64-bit
-  VS build of the IDE and sclang (using MinGW runtimes for supernova). The
-  64-bit build of supernova currently breaks, but might be more easy to fix
-  than the VS build.
 
 * It is possible to build SuperCollider without the IDE, and even without Qt
   (and implicitly without the IDE). This is not controlled via build targets,
@@ -1237,8 +1230,6 @@ Known issues
 
 - READLINE/Command line-mode for sclang is not available.
 
-- Supernova is not available.
-
 - using shell commands from SC only works in a quite limited way (and always did).
   .unixCmd expects a unix shell, only for essential requirements workarounds
   are in place on Windows.
@@ -1261,7 +1252,7 @@ software publicly and freely available.
 [cmake]: http://www.cmake.org/download/
 [conemu]: https://conemu.github.io/ (free console emulator)
 [dependency walker]: http://www.dependencywalker.com/ (inspect missing library errors)
-[dx9sdk]: http://www.microsoft.com/en-us/download/details.aspx?id=6812 (MS DirectX 9 SDK (June 2010\) for VS build)
+[dx9sdk]: http://www.microsoft.com/en-us/download/details.aspx?id=6812 (MS DirectX 9 SDK, June 2010)
 [fftw]: http://www.fftw.org/install/windows.html
 [Git]: http://git-scm.com/download/win (Git for Windows)
 [libsndfile]: http://www.mega-nerd.com/libsndfile/

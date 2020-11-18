@@ -1,5 +1,14 @@
 if (NOT EXISTS ${CMAKE_CURRENT_SOURCE_DIR}/nova-simd/vec.hpp)
-    message(FATAL_ERROR "It appears you haven't cloned this project's git submodules: please run `git submodule update --init --recursive` from the root level of the repository")
+    message(FATAL_ERROR "It appears you haven't cloned this project's git submodules:"
+			" please run `git submodule update --init --recursive` from the root level of the repository.\n"
+			"For advice on setting up submodules, and also on keeping them updated over time, please see"
+			" this wiki page, and consider saving this link:"
+			" https://github.com/supercollider/supercollider/wiki/git-cheat-sheet#working-with-submodules")
+endif()
+
+if(NOT SYSTEM_PORTAUDIO)
+    message(STATUS "PortAudio: building static library")
+    add_subdirectory(portaudio)
 endif()
 
 if(NOT SYSTEM_BOOST) # we compile boost ourselves
@@ -54,6 +63,7 @@ if(NOT SYSTEM_BOOST) # we compile boost ourselves
 
 
 	if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+		target_compile_options(boost_filesystem_lib PRIVATE -fPIC)
 		target_compile_options(boost_thread_lib PRIVATE -fPIC)
 		target_link_libraries(boost_thread_lib rt)
 	endif()

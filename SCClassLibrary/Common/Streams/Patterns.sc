@@ -93,10 +93,13 @@ Pattern : AbstractFunction {
 	// dur: if nil, record until pattern stops or is stopped externally
 	// fadeTime: allow extra time after last Event for nodes to become silent
 
-	record { |path, headerFormat = "AIFF", sampleFormat = "float", numChannels = 2, dur = nil, fadeTime = 0.2, clock(TempoClock.default), protoEvent(Event.default), server(Server.default), out = 0, outNumChannels|
+	record { |path, headerFormat, sampleFormat, numChannels = 2, dur = nil, fadeTime = 0.2, clock(TempoClock.default), protoEvent(Event.default), server(Server.default), out = 0, outNumChannels|
 
 		var recorder = Recorder(server);
 		var pattern = if(dur.notNil) { Pfindur(dur, this) } { this };
+
+		recorder.recHeaderFormat = headerFormat;
+		recorder.recSampleFormat = sampleFormat;
 
 		server.waitForBoot {
 			var group, bus, startTime, free, monitor;
@@ -642,17 +645,17 @@ Pprotect : FilterPattern {
 		^super.new(pattern).func_(func)
 	}
 	storeArgs { ^[ pattern, func ] }
-	asStream {
-		var rout = Routine(pattern.embedInStream(_));
-		rout.exceptionHandler = { |error|
-			// 'func' might throw an error
-			// we must clear the exceptionHandler before that
-			// otherwise, infinite recursion is the result
-			rout.exceptionHandler = nil;
-			func.value(error, rout);
-			nil.handleError(error)
-		};
-		^rout
+
+	embedInStream { arg inval;
+		var result = prTry { pattern.embedInStream(inval) };
+		if(result.isException) {
+			func.value(result, thisThread);
+			result.throw;  // to nested error handlers
+		} {
+			// here, `protect` calls the error handler
+			// but Pprotect has a slightly different meaning
+			^result
+		}
 	}
 }
 

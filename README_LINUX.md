@@ -6,7 +6,7 @@ Build requirements
 
 These are strict requirements for scsynth and supernova:
 
-- [gcc][gcc] >= 4.8
+- A C++ compiler. SuperCollider guarantees support for [gcc][gcc] >= 6 and [clang][clang] >= 4.
 - [cmake][cmake] >= 3.5: Cross-platform build system.
 - [libsndfile][libsndfile] >= 1.0: Soundfile I/O.
 - [libjack][libjack]: Development headers for the JACK Audio Connection Kit.
@@ -18,6 +18,7 @@ These packages are required by default for scsynth and supernova, but the compon
 - [libavahi-client][libavahi-client]: For zero-configuration networking. To build the servers without Avahi, use the `NO_AVAHI=ON` CMake flag.
 
 [gcc]: http://www.gnu.org/software/gcc
+[clang]: https://clang.llvm.org
 [libjack]: http://www.jackaudio.org/
 [cmake]: http://www.cmake.org
 [libsndfile]: http://www.mega-nerd.com/libsndfile
@@ -36,21 +37,23 @@ For sclang and scide:
 - [libudev][libudev]: Device manager library, required for HID support.
 - [Linux kernel][Linux kernel] >= 2.6: Required for LID support.
 - [libreadline][libreadline] >= 5: Required for sclang's CLI interface.
+- [ncurses][ncurses]: Required for sclang's CLI interface.
 
 [Qt]: http://qt-project.org
 [ALSA]: http://www.alsa-project.org
 [libudev]: http://www.freedesktop.org/software/systemd/man/libudev.html
 [libreadline]: http://savannah.gnu.org/projects/readline
+[ncurses]: https://invisible-island.net/ncurses/
 [Linux kernel]: http://www.kernel.org
 [git]: https://git-scm.com/
 
 Installing requirements on Debian
 ---------------------------------
 
-There are dedicated web pages for building on particular embedded Linux platforms:
+There are dedicated READMEs in this repository for building on particular embedded Linux platforms:
 
-- [Raspberry Pi](http://supercollider.github.io/development/building-raspberrypi)
-- [BeagleBone Black](https://supercollider.github.io/development/building-beagleboneblack)
+- Raspberry Pi: README_RASPBERRY_PI.md
+- BeagleBone Black: README_BEAGLEBONE_BLACK.md
 
 On Debian-like systems, the following command installs the minimal recommended dependencies for compiling scsynth and supernova:
 
@@ -60,7 +63,7 @@ If you need to use JACK1 replace libjack-jackd2-dev by libjack-dev.
 
 The following command installs all the recommended dependencies for sclang except for Qt:
 
-    sudo apt-get install git libasound2-dev libicu-dev libreadline6-dev libudev-dev pkg-config
+    sudo apt-get install git libasound2-dev libicu-dev libreadline6-dev libudev-dev pkg-config libncurses5-dev
 
 Installing Qt
 -------------
@@ -104,6 +107,13 @@ Worst case scenario, you can grab Qt off the [Qt official website](https://www.q
 At the "Select Components" step, pop open Qt → Qt 5.11 (or whatever the latest version is) and check the "Desktop" option. If you are building the IDE, also select "QWebEngine."
 
 Unfortunately, the Qt installer does not allow you to deselect the multi-gigabyte QtCreator download.
+
+Using clang
+-----------
+
+SuperCollider can be compiled with clang, with the following limitations:
+- for clang 4, pass `-DSC_ALBETON_LINK=OFF` when configuring the project
+- by default clang will use libc++; you can pass `-DSC_CLANG_USES_LIBSTDCPP=ON` to use libstdc++ instead
 
 Building
 --------

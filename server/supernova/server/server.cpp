@@ -18,6 +18,8 @@
 
 #include <stdexcept>
 
+#include "SC_Win32Utils.h"
+
 #include "nova-tt/thread_affinity.hpp"
 #include "nova-tt/thread_priority.hpp"
 #include "nova-tt/name_thread.hpp"
@@ -35,6 +37,8 @@
 #    include <CoreAudio/HostTime.h>
 #    include <CoreAudio/CoreAudioTypes.h>
 #endif
+
+#include <boost/predef/hardware.h>
 
 namespace nova {
 
@@ -58,7 +62,7 @@ nova_server::nova_server(server_arguments const& args):
     sc_factory->initialize(args, server_shared_memory_creator::shm->get_control_busses());
 
     /** first guess: needs to be updated, once the backend is started */
-    time_per_tick = time_tag::from_samples(args.blocksize, args.samplerate);
+    time_per_tick = time_tag::from_samples(args.blocksize, args.samplerate ? args.samplerate : 44100);
 
     if (!args.non_rt)
         start_receive_thread();
@@ -207,7 +211,7 @@ static void name_current_thread(int thread_index) {
 }
 
 static void set_daz_ftz(void) {
-#ifdef __SSE__
+#if BOOST_HW_SIMD_X86 >= BOOST_HW_SIMD_X86_SSE_VERSION
     /* denormal handling */
     _MM_SET_FLUSH_ZERO_MODE(_MM_FLUSH_ZERO_ON);
     _mm_setcsr(_mm_getcsr() | 0x40);
@@ -219,7 +223,7 @@ static bool set_realtime_priority(int thread_index) {
 
 #ifdef NOVA_TT_PRIORITY_PERIOD_COMPUTATION_CONSTRAINT
     double blocksize = server_arguments::instance().blocksize;
-    double samplerate = server_arguments::instance().samplerate;
+    double samplerate = server_arguments::instance().samplerate ? server_arguments::instance().samplerate : 44100;
 
     double ns_per_block = 1e9 / samplerate * blocksize;
 
@@ -319,9 +323,17 @@ void realtime_engine_functor::init_thread(void) {
     name_current_thread(0);
 }
 
-void realtime_engine_functor::log_(const char* str) { instance->log_printf(str); }
+void realtime_engine_functor::log_(const char* str) {
+    // Silently drop messages; if instance is null it means something failed while constructing nova_server
+    if (instance)
+        instance->log_printf(str);
+}
 
 void realtime_engine_functor::log_printf_(const char* fmt, ...) {
+    // Silently drop messages; if instance is null it means something failed while constructing nova_server
+    if (instance == nullptr)
+        return;
+
     va_list vargs;
     va_start(vargs, fmt);
     instance->log_printf(fmt, vargs);

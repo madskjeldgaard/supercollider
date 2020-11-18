@@ -1,28 +1,44 @@
 TestUnitTest : UnitTest {
 
-	var someVar, toreDown, count=0;
+	var setUpHappened = false;
+	classvar <>classSetUpHappened = false;
+	classvar <>classTearDownHappened = false;
+
+	*setUpClass {
+		this.classSetUpHappened = true;
+	}
+
+	*tearDownClass {
+		this.classTearDownHappened = true;
+	}
 
 	setUp {
-		someVar = \setUp;
-		count = count + 1;
+		setUpHappened = true;
 	}
-	tearDown {
-		someVar = \tearDown;
-		toreDown = true;
+
+	test_setUpClass_already_happened {
+		this.assert(this.class.classSetUpHappened, "setUpClass should have happened");
+	}
+
+	test_setUpClass {
+		this.class.classSetUpHappened = false;
+		this.class.prRunWithinSetUpClass {
+			this.assert(this.class.classSetUpHappened,
+				"setUpClass should have happened before prRunWithinSetUpClass function is called"
+			);
+		}
+	}
+
+	test_tearDownClass {
+		this.class.classTearDownHappened = false;
+		this.class.prRunWithinSetUpClass;
+		this.assert(this.class.classTearDownHappened,
+			"tearDownClass should have happened after prRunWithinSetUpClass function is called"
+		);
 	}
 
 	test_setUp {
-		this.assertEquals(count, 1, "count should be on 1");
-		this.assertEquals(someVar, \setUp, "someVar be set in setUp");
-	}
-
-	test_toreDown{
-		this.assertEquals(toreDown, true, "toreDown should be set at the end of the last test");
-		this.assertEquals(count, 2, "count should be on 2");
-	}
-
-	test_setUp2 {
-		this.assertEquals(count, 3, "count should be on 3");
+		this.assert(setUpHappened, "setUp should have happened")
 	}
 
 	test_bootServer {
@@ -33,23 +49,8 @@ TestUnitTest : UnitTest {
 	}
 
 	test_assert {
-		this.assert(true, "assert(true) should certainly work");
+		this.assert(true, "assert(true) should certainly work")
 	}
-
-	/*
-	test_failure {
-		this.assert( false, "should fail")
-	}
-	*/
-
-	/*
-	test_assertAsynch {
-		Server.default.boot;
-		this.assertAsynch( Server.default.serverRunning, {
-			this.assert( Server.default.serverRunning,"server is indeed running");
-			}, "assert asynch should have triggered the server to boot and then run the test block");
-	}
-	*/
 
 	test_findTestedClass {
 		this.assertEquals(TestMixedBundleTester.findTestedClass, MixedBundleTester)
@@ -74,11 +75,17 @@ TestUnitTest : UnitTest {
 		this.assertNoException({ try { 1789.monarchy } }, "assertNoThrow should return true for not an error")
 	}
 
-	/*** IF YOU ADD MORE TESTS, UPDATE THE numTestMethods var ***/
-	// test_findTestMethods {
-	// 	var numTestMethods = 7;
-	// 	this.assert( this.findTestMethods.size == numTestMethods, "should be " + numTestMethods + " test methods");
-	// }
+	test_wait {
+		var condition = Condition.new;
+		var r = Routine {
+			0.01.yield;
+			condition.test = true;
+		};
+		r.play;
+		this.wait(condition, maxTime:0.02);
+		this.assert(condition.test, "UnitTest.wait should continue when test is true");
+	}
+
+
 
 }
-

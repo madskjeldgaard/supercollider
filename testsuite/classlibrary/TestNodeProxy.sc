@@ -40,6 +40,137 @@ TestNodeProxy : UnitTest {
 		this.assertEquals(proxy.isPlaying, false, "Setting the proxy's source should not set isPlaying = true");
 	}
 
+	test_asCode_basic {
+		var codeString = "a = NodeProxy.new(Server.fromName( 'TestNodeProxy' ));\n";
+
+		this.assertEquals(proxy.asCode, codeString,
+			"asCode-posting basic nodeproxy should post valid source code.");
+	}
+
+	test_asCode_single {
+		var codeString = "a = NodeProxy.new(Server.fromName( 'TestNodeProxy' )).source_({ DC.ar });\n";
+		proxy.source = { DC.ar };
+
+		this.assertEquals(proxy.asCode, codeString,
+			"asCode-posting single-source nodeproxy should post simple source form.");
+	}
+
+	test_asCode_multi {
+		var asCodeString =
+		"(\n"
+		"a = NodeProxy.new;\n"
+		"a[5] = { DC.ar };\n"
+		"a[10] = { DC.ar(0.01) };\n"
+		"\n"
+		");\n";
+		proxy[5] = { DC.ar };
+		proxy[10] = { DC.ar(0.01) };
+		this.assertEquals(proxy.asCode, asCodeString,
+			"asCode-posting multi-source nodeproxy asCode should post all its sources.");
+	}
+
+	test_asCode_settings {
+		var codeString =
+		"(\n"
+		"a = NodeProxy.new(Server.fromName( 'TestNodeProxy' ));\n"
+		"a.set('freq', 440);\n"
+		");\n";
+		proxy.set('freq', 440);
+
+		this.assertEquals(proxy.asCode, codeString,
+			"asCode-posting nodeproxy with settings should post these correctly."
+		);
+	}
+
+	// this one needs the server booted ...
+	test_asCode_playState {
+		var codeString =
+		"(\n"
+		"a = NodeProxy.new(Server.fromName( 'TestNodeProxy' ));\n"
+		"a.play(\n"
+		"	out: 8, \n"
+		"	vol: 0.25\n"
+		"\n"
+		");\n"
+		");\n";
+
+		this.bootServer(server);
+
+		proxy.play(8, 2, vol: 0.25);
+
+		server.sync; // avoids "FAILURE IN SERVER /g_new Group 1 not found"
+
+		this.assertEquals(proxy.asCode, codeString,
+			"asCode-posting nodeproxy with settings should post these correctly."
+		);
+
+		server.quit;
+	}
+
+	test_asCode_single_ndef {
+		var codeString = "Ndef('x', { DC.ar });\n";
+		proxy = Ndef(\x, { DC.ar });
+
+		this.assertEquals(proxy.asCode, codeString,
+			"asCode-posting single-source Ndef should post correctly."
+		);
+
+		Ndef(\x).free.clear;
+	}
+
+	test_asCode_multi_ndef {
+		var codeString =
+		"(\n"
+		"Ndef('x')[5] = { DC.ar };\n"
+		"Ndef('x')[10] = { DC.ar(0.01) };\n"
+		"\n"
+		");\n";
+
+		proxy = Ndef(\x);
+		Ndef(\x)[5] = { DC.ar };
+		Ndef(\x)[10] = { DC.ar(0.01) };
+
+		this.assertEquals(proxy.asCode, codeString,
+			"asCode-posting single-source Ndef should post correctly."
+		);
+
+		Ndef(\x).free.clear;
+	}
+
+	test_asCode_single_inProxySpace {
+		var codeString = "~a = { DC.ar };\n";
+		var p = ProxySpace.push;
+		p[\a] = { DC.ar };
+		p[\a].asCode.cs;
+
+		this.assertEquals(p[\a].asCode(envir: p), codeString,
+			"asCode-posting single-source proxy should post by key in pushed proxyspace."
+		);
+
+		p[\a].free;
+		p.pop;
+	}
+
+	test_asCode_multi_inProxySpace {
+		var codeString =
+		"(\n"
+		"~a[5] = { DC.ar };\n"
+		"~a[10] = { DC.ar(0.01) };\n"
+		"\n"
+		");\n";
+
+		var p = ProxySpace.push;
+		p[\a][5] = { DC.ar };
+		p[\a][10] = { DC.ar(0.01) };
+
+		this.assertEquals(p[\a].asCode(envir: p), codeString,
+			"asCode-posting multi-source proxy should post by key in pushed proxyspace."
+		);
+
+		p[\a].free;
+		p.pop;
+	}
+
 	test_schedAfterFade_notPlaying {
 		var ok = false;
 		proxy.fadeTime = 0.1;
@@ -56,5 +187,106 @@ TestNodeProxy : UnitTest {
 		this.assert(ok, "if playing, schedAfterFade should happen right after fadeTime");
 	}
 
+	test_copy_fadeTimeIsCopied {
+        var oldProxy = proxy.fadeTime_(33);
+        var newProxy = oldProxy.copy;
+        this.assertEquals(oldProxy.fadeTime, newProxy.fadeTime);
+    }
+
+	test_copy_awakeIsCopied {
+		var oldProxy = proxy.awake_(false);
+		var newProxy = oldProxy.copy;
+
+		this.assertEquals(oldProxy.awake, newProxy.awake);
+	}
+
+	test_copy_clockIsCopied {
+		var oldProxy = proxy.clock_(TempoClock.new(2.182));
+		var newProxy = oldProxy.copy;
+
+		this.assertEquals(oldProxy.clock, newProxy.clock);
+	}
+
+	test_copy_quantIsCopied {
+		var oldProxy = proxy.quant_(4);
+		var newProxy = oldProxy.copy;
+
+		this.assertEquals(oldProxy.quant, newProxy.quant);
+	}
+
+	test_copy_pauseIsCopied {
+		var oldProxy = proxy.pause;
+		var newProxy = oldProxy.copy;
+
+		this.assertEquals(oldProxy.paused, newProxy.paused);
+	}
+
+	test_copy_sourceIsCopied {
+		var oldProxy = proxy.source_({ Silent.ar });
+		var newProxy = oldProxy.copy;
+
+		this.assertEquals(oldProxy.source, newProxy.source);
+	}
+
+	test_copy_nodeMapIsCopied {
+		var oldProxy = proxy.source_({ Silent.ar });
+		var newProxy = oldProxy.copy;
+
+		this.assertEquals(oldProxy.nodeMap, newProxy.nodeMap);
+	}
+
+	test_copy_independent {
+		var copied;
+		proxy.source = 1967;
+		copied = proxy.copy;
+		copied.source = 1968;
+		this.assertEquals(proxy.source, 1967, "copying a proxy should return an independent object");
+	}
+
+	test_control_fade {
+		var server = Server(this.class.name);
+		var result, proxy, timeout;
+		var cond = Condition.new;
+		var fadeTime = 0.1;
+		var waitTime = (fadeTime + (server.latency * 2) + 1e-2);
+		var resp;
+
+		server.bootSync;
+
+		proxy = NodeProxy(server);
+		proxy.source = { DC.kr(2000) };
+		proxy.fadeTime = fadeTime;
+
+		proxy.source = 440;
+		waitTime.wait;
+
+		resp = OSCFunc({ cond.unhang; resp.free; }, '/c_set');
+		timeout = fork { 1.wait; cond.unhang };
+		proxy.bus.get({ |val| result = val });
+		cond.hang;
+		timeout.stop;
+		resp.free;
+
+		this.assertEquals(result, proxy.source, "after the crossfade from a ugen function to a value the bus should have this value");
+
+		server.quit;
+		server.remove;
+	}
+
+	test_map_rates {
+
+		var p = ProxySpace.new.use {
+
+			~out = { \in.ar(0 ! 2) };
+			~osc = { |freq = 440| Saw.ar(freq).dup };
+			~osc <>> ~out;
+			this.assertEquals(~out.controlNames.detect { |cn| cn.name == \in }.rate, \audio,
+				"report the correct controlNames rates for audio rate proxies"
+			);
+		};
+
+		p.clear;
+
+	}
 
 }

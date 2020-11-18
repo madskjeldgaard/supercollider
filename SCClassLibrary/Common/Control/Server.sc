@@ -86,7 +86,7 @@ ServerOptions {
 				remoteControlVolume: false,
 				memoryLocking: false,
 				threads: nil,
-				useSystemClock: false,
+				useSystemClock: true,
 				numPrivateAudioBusChannels: 1020, // see corresponding setter method below
 				reservedNumAudioBusChannels: 0,
 				reservedNumControlBusChannels: 0,
@@ -189,7 +189,7 @@ ServerOptions {
 			});
 		}
 		{
-			o = o ++ " -H % %".format(inDevice.asString.quote, outDevice.asString.quote);
+			o = o ++ " -H % %".format((inDevice ? "").asString.quote, (outDevice ? "").asString.quote);
 		};
 		if (verbosity != defaultValues[\verbosity], {
 			o = o ++ " -V " ++ verbosity;
@@ -218,6 +218,8 @@ ServerOptions {
 		});
 		if (useSystemClock, {
 			o = o ++ " -C 1"
+		}, {
+			o = o ++ " -C 0"
 		});
 		if (maxLogins.notNil, {
 			o = o ++ " -l " ++ maxLogins;
@@ -761,10 +763,13 @@ Server {
 	/* scheduling */
 
 	wait { |responseName|
-		var routine = thisThread;
+		var condition = Condition.new;
 		OSCFunc({
-			routine.resume(true)
+			condition.test = true;
+			condition.signal
 		}, responseName, addr).oneShot;
+
+		condition.wait
 	}
 
 	waitForBoot { |onComplete, limit = 100, onFailure|
@@ -1024,7 +1029,10 @@ Server {
 				this.prOnServerProcessExit(exitCode);
 			});
 			("Booting server '%' on address %:%.").format(this.name, addr.hostname, addr.port.asString).postln;
-			if(options.protocol == \tcp, { addr.tryConnectTCP(onComplete) }, onComplete);
+			// in case the server takes more time to boot
+			// we increase the number of attempts for tcp connection
+			// in order to minimize the chance of timing out
+			if(options.protocol == \tcp, { addr.tryConnectTCP(onComplete, nil, 20) }, onComplete);
 		}
 	}
 
@@ -1082,8 +1090,15 @@ Server {
 
 		addr.sendMsg("/quit");
 
-		if(watchShutDown and: { this.unresponsive }) {
-			"Server '%' was unresponsive. Quitting anyway.".format(name).postln;
+		if(this.unresponsive) {
+			if(pid.notNil) {
+				"Server '%' is currently unresponsive. Forcing process to stop via system command.".format(name).postln;
+				thisProcess.platform.killProcessByID(pid);
+			} {
+				if(watchShutDown) {
+					"Server '%' was unresponsive. Quitting anyway.".format(name).postln;
+				};
+			};
 			watchShutDown = false;
 		};
 
@@ -1100,8 +1115,6 @@ Server {
 			"'/quit' message sent to server '%'.".format(name).postln;
 		};
 
-		// let server process reset pid to nil!
-		// pid = nil;
 		sendQuit = nil;
 		maxNumClients = nil;
 
@@ -1126,7 +1139,15 @@ Server {
 		// you can't cause them to quit via OSC (the boot button)
 
 		// this brutally kills them all off
-		thisProcess.platform.killAll(this.program.basename);
+		thisProcess.platform.name.switch(
+			\windows, {
+				thisProcess.platform.killAll("scsynth.exe");
+				thisProcess.platform.killAll("supernova.exe");
+			}, {
+				thisProcess.platform.killAll("scsynth");
+				thisProcess.platform.killAll("supernova");
+			}
+		);
 		this.quitAll(watchShutDown: false);
 	}
 

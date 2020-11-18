@@ -29,7 +29,12 @@
 #endif
 
 // AppleClang workaround
-#if defined(__apple_build_version__) && __apple_build_version__ > 11000000
+#if defined(__apple_build_version__) && __apple_build_version__ > 10000000
+#    define BOOST_ASIO_HAS_STD_STRING_VIEW 1
+#endif
+
+// libc++ workaround
+#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 7000 && _LIBCPP_VERSION < 9000
 #    define BOOST_ASIO_HAS_STD_STRING_VIEW 1
 #endif
 
@@ -228,9 +233,10 @@ private:
 public:
     class tcp_connection : public nova_endpoint {
     public:
-        typedef std::shared_ptr<tcp_connection> pointer;
+        using pointer = std::shared_ptr<tcp_connection>;
+        using executor = tcp::socket::executor_type;
 
-        static pointer create(boost::asio::io_service& io_service) { return pointer(new tcp_connection(io_service)); }
+        static pointer create(const executor& executor) { return pointer(new tcp_connection(executor)); }
 
         tcp::socket& socket() { return socket_; }
 
@@ -239,7 +245,7 @@ public:
         bool operator==(tcp_connection const& rhs) const { return &rhs == this; }
 
     private:
-        tcp_connection(boost::asio::io_service& io_service): socket_(io_service) {}
+        tcp_connection(const executor& executor): socket_(executor) {}
 
         void send(const char* data, size_t length) override final;
 

@@ -42,7 +42,7 @@
 
 #include <boost/asio/use_future.hpp>
 #include <boost/asio.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 #include <boost/cstdint.hpp>
 #include <boost/lockfree/spsc_queue.hpp>
 
@@ -226,8 +226,8 @@ private:
     uint8_t m_rxbuffer[kBufferSize];
 };
 
-PyrSymbol* SerialPort::s_dataAvailable = 0;
-PyrSymbol* SerialPort::s_doneAction = 0;
+PyrSymbol* SerialPort::s_dataAvailable = nullptr;
+PyrSymbol* SerialPort::s_doneAction = nullptr;
 
 void SerialPort::setFlowControl(serial_port::flow_control::type control) {
     /* FIXME backported from 3.9 impl -- boost.asio doesn't correctly detect support for these features
@@ -278,7 +278,7 @@ void SerialPort::setExclusive(bool b) {
 
 static SerialPort* getSerialPort(PyrSlot* slot) {
     if (NotPtr(&slotRawObject(slot)->slots[0]))
-        return NULL;
+        return nullptr;
     return (SerialPort*)slotRawPtr(&slotRawObject(slot)->slots[0]);
 }
 
@@ -335,7 +335,7 @@ static int prSerialPort_Open(struct VMGlobals* g, int numArgsPushed) {
         return err;
 
     SerialPort::Options options {};
-    SerialPort* port = 0;
+    SerialPort* port = nullptr;
 
     options.exclusive = IsTrue(args + 2);
 

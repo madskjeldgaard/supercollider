@@ -1,5 +1,27 @@
 find_package(Sndfile)
 
+# here we choose who provides us with the FFT lib
+# this is done independently for scsynth and supernova
+# on macOS scsynth uses vDSP implementation for FFT
+# which is not thread-safe
+
+if (APPLE)
+    add_definitions("-DSC_FFT_VDSP")
+    message(STATUS "FFT library (scsynth): vDSP")
+else()
+    find_package(FFTW3f 3.3)
+
+    if (NOT FFTW3F_FOUND OR FFT_GREEN)
+        message(STATUS "FFT library (scsynth): Green")
+        set(FFT_GREEN 1)
+        add_definitions("-DSC_FFT_GREEN")
+    else()
+        message(STATUS "Found fftw3f: ${FFTW3F_LIBRARY}")
+        message(STATUS "FFT library (scsynth): FFTW")
+        add_definitions("-DSC_FFT_FFTW")
+    endif()
+endif()
+
 # Here we work out which audio API to use, from system type and/or user option.
 if(AUDIOAPI STREQUAL "default")
 	if(APPLE)
@@ -20,13 +42,13 @@ if(AUDIOAPI STREQUAL jack)
   if(NOT JACK_FOUND)
     message(FATAL_ERROR "Jack selected as audio API, but development files not found")
   endif()
-elseif(AUDIOAPI STREQUAL portaudio AND ((NOT WIN32) OR MSYS)) # MSYS like Apple
+elseif(AUDIOAPI STREQUAL portaudio AND SYSTEM_PORTAUDIO)
     find_package(Portaudio)
     if(NOT PORTAUDIO_FOUND)
       message(FATAL_ERROR "Portaudio selected as audio API, but development files not found")
     endif()
 endif()
-message(STATUS "Audio API: ${AUDIOAPI}")
+message(STATUS "Audio API (scsynth): ${AUDIOAPI}")
 
 set(scsynth_sources
 	SC_BufGen.cpp
@@ -62,6 +84,7 @@ set(scsynth_sources
 	${CMAKE_SOURCE_DIR}/common/SC_StringParser.cpp
 	${CMAKE_SOURCE_DIR}/common/Samp.cpp
 	${CMAKE_SOURCE_DIR}/common/sc_popen.cpp
+	${CMAKE_SOURCE_DIR}/common/SC_ServerBootDelayWarning.cpp
 )
 
 if(APPLE)
@@ -167,11 +190,7 @@ endif()
 if (AUDIOAPI STREQUAL jack)
 	target_link_libraries(libscsynth ${JACK_LIBRARIES})
 elseif(AUDIOAPI STREQUAL portaudio)
-	if(WIN32 AND NOT MSYS)
-		target_link_libraries(libscsynth portaudio)
-	else()
-		target_link_libraries(libscsynth ${PORTAUDIO_LIBRARIES})
-	endif()
+	target_link_libraries(libscsynth ${PORTAUDIO_LIBRARIES})
 elseif(AUDIOAPI STREQUAL coreaudio)
 	target_link_libraries(libscsynth "-framework CoreAudio")
 endif()
@@ -207,7 +226,13 @@ if(CMAKE_SYSTEM_NAME MATCHES "Linux")
 	target_link_libraries(libscsynth rt)
 endif()
 
-add_executable(scsynth scsynth_main.cpp)
+add_executable(scsynth
+    scsynth_main.cpp
+
+    # these files contain code only used in main()
+    ${CMAKE_SOURCE_DIR}/common/SC_ServerBootDelayWarning.cpp
+    $<$<BOOL:${APPLE}>: ${CMAKE_SOURCE_DIR}/common/SC_AppleEventLoop.mm >
+    )
 target_link_libraries(scsynth libscsynth)
 
 if (PTHREADS_FOUND)
@@ -237,6 +262,7 @@ if(APPLE)
 		COMMAND ${CMAKE_COMMAND} -E copy_if_different $<TARGET_FILE:scsynth> $<TARGET_FILE_DIR:SuperCollider>/../Resources)
 elseif(WIN32)
     if(NOT MSVC)
+      target_link_libraries(scsynth "-municode")
       set_target_properties(scsynth libscsynth PROPERTIES RUNTIME_OUTPUT_DIRECTORY "$<CONFIG>")
     endif(NOT MSVC)
 

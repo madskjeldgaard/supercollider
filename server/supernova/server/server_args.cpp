@@ -43,8 +43,8 @@ server_arguments::server_arguments(int argc, char* argv[]) {
         ("audio-busses,a", value<uint32_t>(&audio_busses)->default_value(1024), "number of audio busses")
         ("block-size,z", value<uint32_t>(&blocksize)->default_value(64), "audio block size")
         ("hardware-buffer-size,Z", value<int32_t>(&hardware_buffer_size)->default_value(0), "hardware buffer size")
-        ("use-system-clock,C", value<uint16_t>(&use_system_clock)->default_value(0), "type of clock sampleclock=0 systemclock=1")
-        ("samplerate,S", value<uint32_t>(&samplerate)->default_value(44100), "hardware sample rate")
+        ("use-system-clock,C", value<uint16_t>(&use_system_clock)->default_value(1), "type of clock sampleclock=0 systemclock=1")
+        ("samplerate,S", value<uint32_t>(&samplerate)->default_value(0), "hardware sample rate")
         ("buffers,b", value<uint32_t>(&buffers)->default_value(1024), "number of sample buffers")
         ("max-nodes,n", value<uint32_t>(&max_nodes)->default_value(1024), "maximum number of server nodes")
         ("max-synthdefs,d", value<uint32_t>(&max_synthdefs)->default_value(1024), "maximum number of synthdefs")
@@ -67,10 +67,10 @@ server_arguments::server_arguments(int argc, char* argv[]) {
                                                             "-2 suppresses informational and many error messages, as well as\n"
                                                             "messages from Poll.")
 #ifdef _WIN32
-        ("ugen-search-path,U", value<vector<string> >(&ugen_paths), "A list of paths seperated by `;`.\n"
+        ("ugen-search-path,U", value<vector<string> >(&ugen_paths), "A list of paths separated by `;`.\n"
                                                             "If specified, standard paths are NOT searched for plugins.\nMay be specified several times.")
 #else
-        ("ugen-search-path,U", value<vector<string> >(&ugen_paths), "A list of paths seperated by `:`.\n"
+        ("ugen-search-path,U", value<vector<string> >(&ugen_paths), "A list of paths separated by `:`.\n"
                                                             "If specified, standard paths are NOT searched for plugins.\nMay be specified several times.")
 #endif
         ("restricted-path,P", value<vector<string> >(&restrict_paths), "if specified, prevents file-accessing OSC commands from accessing files outside <restricted-path>")

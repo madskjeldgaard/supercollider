@@ -30,9 +30,35 @@
 
 #include "util/HelpBrowserWebSocketServices.hpp"
 
+#include <iostream>
+#include <string>
+
 using namespace ScIDE;
 
+static void show_usage(std::string name) {
+    std::cerr << "Usage: " << name << " <option(s)> [file1.scd file2.scd ...]\n"
+              << "Options:\n"
+              << "\t-h, --help\tShow this help message\n"
+              << std::endl;
+}
+
 int main(int argc, char* argv[]) {
+    for (int i = 1; i < argc; ++i) {
+        std::string arg = argv[i];
+        if ((arg == "-h") || (arg == "--help")) {
+            show_usage(argv[0]);
+            return 0;
+        }
+    }
+
+    QCoreApplication::setAttribute(Qt::AA_EnableHighDpiScaling);
+    // In order to scale the UI properly on Windows with display scaling like 125% or 150%
+    // we need to disable scale factor rounding
+    // This is only available in Qt >= 5.14
+#if (QT_VERSION >= QT_VERSION_CHECK(5, 14, 0))
+    QGuiApplication::setHighDpiScaleFactorRoundingPolicy(Qt::HighDpiScaleFactorRoundingPolicy::PassThrough);
+#endif // QT_VERSION
+
     QApplication app(argc, argv);
 
     QStringList arguments(QApplication::arguments());
@@ -61,9 +87,9 @@ int main(int argc, char* argv[]) {
         qWarning("scide warning: Failed to load fallback translation file.");
 
     // Load translator for locale
-    QString ideTranslationFile = "scide_" + QLocale::system().name();
+    const QLocale locale;
     QTranslator scideTranslator;
-    scideTranslator.load(ideTranslationFile, ideTranslationPath);
+    scideTranslator.load(locale, "scide", "_", ideTranslationPath);
     app.installTranslator(&scideTranslator);
 
     // Force Fusion style to appear consistently on all platforms.

@@ -28,46 +28,12 @@ Primitives for Arrays.
 #include "PyrPrimitive.h"
 #include "SC_InlineBinaryOp.h"
 #include "SC_Constants.h"
-#include <string.h>
+#include "SC_Levenshtein.h"
 
-int basicSize(VMGlobals* g, int numArgsPushed);
-int basicMaxSize(VMGlobals* g, int numArgsPushed);
+#include <cstring>
+#include <algorithm>
 
-int basicSwap(struct VMGlobals* g, int numArgsPushed);
-int basicAt(VMGlobals* g, int numArgsPushed);
-int basicRemoveAt(VMGlobals* g, int numArgsPushed);
-int basicClipAt(VMGlobals* g, int numArgsPushed);
-int basicWrapAt(VMGlobals* g, int numArgsPushed);
-int basicFoldAt(VMGlobals* g, int numArgsPushed);
-int basicPut(VMGlobals* g, int numArgsPushed);
-int basicClipPut(VMGlobals* g, int numArgsPushed);
-int basicWrapPut(VMGlobals* g, int numArgsPushed);
-int basicFoldPut(VMGlobals* g, int numArgsPushed);
-
-int prArrayAdd(VMGlobals* g, int numArgsPushed);
-int prArrayFill(VMGlobals* g, int numArgsPushed);
-int prArrayPop(VMGlobals* g, int numArgsPushed);
-int prArrayGrow(VMGlobals* g, int numArgsPushed);
-int prArrayCat(VMGlobals* g, int numArgsPushed);
-
-int prArrayReverse(VMGlobals* g, int numArgsPushed);
-int prArrayScramble(VMGlobals* g, int numArgsPushed);
-int prArrayRotate(VMGlobals* g, int numArgsPushed);
-int prArrayStutter(VMGlobals* g, int numArgsPushed);
-int prArrayMirror(VMGlobals* g, int numArgsPushed);
-int prArrayMirror1(VMGlobals* g, int numArgsPushed);
-int prArrayMirror2(VMGlobals* g, int numArgsPushed);
-int prArrayExtendWrap(VMGlobals* g, int numArgsPushed);
-int prArrayExtendFold(VMGlobals* g, int numArgsPushed);
-int prArrayPermute(VMGlobals* g, int numArgsPushed);
-int prArrayPyramid(VMGlobals* g, int numArgsPushed);
-int prArraySlide(VMGlobals* g, int numArgsPushed);
-int prArrayLace(VMGlobals* g, int numArgsPushed);
-int prArrayContainsSeqColl(VMGlobals* g, int numArgsPushed);
-int prArrayWIndex(VMGlobals* g, int numArgsPushed);
-int prArrayNormalizeSum(VMGlobals* g, int numArgsPushed);
-int prArrayIndexOfGreaterThan(VMGlobals* g, int numArgsPushed);
-
+// Primitives that work with Arrays. Most of these are used in ArrayedCollection and Array.
 
 int basicSize(struct VMGlobals* g, int numArgsPushed) {
     PyrSlot* a;
@@ -1661,7 +1627,7 @@ int prArrayMirror(struct VMGlobals* g, int numArgsPushed) {
 
     obj1 = slotRawObject(a);
     slots = obj1->slots;
-    size = obj1->size * 2 - 1;
+    size = std::max(obj1->size * 2 - 1, 0);
     obj2 = instantiateObject(g->gc, obj1->classptr, size, false, true);
     obj2->size = size;
     // copy first part of list
@@ -1684,10 +1650,9 @@ int prArrayMirror1(struct VMGlobals* g, int numArgsPushed) {
 
     obj1 = slotRawObject(a);
     slots = obj1->slots;
-    size = obj1->size * 2 - 2;
+    size = std::max(obj1->size * 2 - 2, obj1->size);
     obj2 = instantiateObject(g->gc, obj1->classptr, size, false, true);
     obj2->size = size;
-    // copy first part of list
     memcpy(obj2->slots, slots, obj1->size * sizeof(PyrSlot));
     // copy second part
     k = size / 2;
@@ -2474,6 +2439,70 @@ int prArrayUnlace(struct VMGlobals* g, int numArgsPushed) {
     return errNone;
 }
 
+template <typename T>
+int levenshteinDistanceImpl(
+    PyrSlot* result, const PyrObject* a, const PyrObject* b,
+    std::function<bool(const T&, const T&)> compareFunc = [](const T& a, const T& b) { return a == b; }) {
+    size_t distance = levenshteinDistance<T>()(reinterpret_cast<const T*>(a->slots), a->size,
+                                               reinterpret_cast<const T*>(b->slots), b->size, compareFunc);
+    SetInt(result, static_cast<int>(distance));
+    return errNone;
+}
+
+int arrayLevenshteinDistance(PyrSlot* result, const PyrObject* thisArray, const PyrObject* thatArray) {
+    // if they're both the same format we can compare them..
+    if (thisArray->obj_format == thatArray->obj_format) {
+        switch (thisArray->obj_format) {
+        // if they're raw arrays, compare as such
+        case obj_char:
+            return levenshteinDistanceImpl<char>(result, thisArray, thatArray);
+        case obj_double:
+            return levenshteinDistanceImpl<double>(result, thisArray, thatArray);
+        case obj_float:
+            return levenshteinDistanceImpl<float>(result, thisArray, thatArray);
+        case obj_int16:
+            return levenshteinDistanceImpl<int16>(result, thisArray, thatArray);
+        case obj_int32:
+            return levenshteinDistanceImpl<int32>(result, thisArray, thatArray);
+        case obj_int8:
+            return levenshteinDistanceImpl<int8>(result, thisArray, thatArray);
+        case obj_symbol:
+            // pass them in as slots, compare as raw symbols
+            return levenshteinDistanceImpl<PyrSlot>(
+                result, thisArray, thatArray,
+                [](const PyrSlot& a, const PyrSlot& b) { return slotRawSymbol(&a) == slotRawSymbol(&b); });
+        case obj_slot:
+            // if it is slotted, compare identities
+            // this will handle polymorphic arrays in a predictable way
+            return levenshteinDistanceImpl<PyrSlot>(result, thisArray, thatArray,
+                                                    [](const PyrSlot& a, const PyrSlot& b) { return SlotEq(&a, &b); });
+        default:
+            return errWrongType;
+        }
+    } else {
+        return errWrongType;
+    }
+}
+
+int prArrayLevenshteinDistance(struct VMGlobals* g, int numArgsPushed) {
+    auto* slotThatArray = g->sp;
+    auto* slotThisArray = g->sp - 1;
+
+    if (NotObj(slotThisArray) || NotObj(slotThatArray))
+        return errWrongType;
+
+    auto* objThisArray = slotRawObject(slotThisArray);
+    auto* objThatArray = slotRawObject(slotThatArray);
+
+    if (!(slotRawInt(&objThisArray->classptr->classFlags) & classHasIndexableInstances))
+        return errNotAnIndexableObject;
+
+    if (!(slotRawInt(&objThatArray->classptr->classFlags) & classHasIndexableInstances))
+        return errNotAnIndexableObject;
+
+    return arrayLevenshteinDistance(slotThisArray, objThisArray, objThatArray);
+}
+
 void initArrayPrimitives() {
     int base, index;
 
@@ -2532,44 +2561,6 @@ void initArrayPrimitives() {
     definePrimitive(base, index++, "_ArrayEnvAt", prArrayEnvAt, 2, 0);
     definePrimitive(base, index++, "_ArrayIndexOfGreaterThan", prArrayIndexOfGreaterThan, 2, 0);
     definePrimitive(base, index++, "_ArrayUnlace", prArrayUnlace, 3, 0);
+
+    definePrimitive(base, index++, "_ArrayLevenshteinDistance", prArrayLevenshteinDistance, 2, 0);
 }
-
-
-#if _SC_PLUGINS_
-
-#    include "SCPlugin.h"
-
-#    pragma export on
-extern "C" {
-SCPlugIn* loadPlugIn(void);
-}
-#    pragma export off
-
-
-// define plug in object
-class APlugIn : public SCPlugIn {
-public:
-    APlugIn();
-    virtual ~APlugIn();
-
-    virtual void AboutToCompile();
-};
-
-APlugIn::APlugIn() {
-    // constructor for plug in
-}
-
-APlugIn::~APlugIn() {
-    // destructor for plug in
-}
-
-void APlugIn::AboutToCompile() {
-    // this is called each time the class library is compiled.
-    initArrayPrimitives();
-}
-
-// This function is called when the plug in is loaded into SC.
-// It returns an instance of APlugIn.
-SCPlugIn* loadPlugIn() { return new APlugIn(); }
-
-#endif

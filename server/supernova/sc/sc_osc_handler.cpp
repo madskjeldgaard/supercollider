@@ -19,13 +19,18 @@
 #include <iostream>
 
 // AppleClang workaround
-#if defined(__apple_build_version__) && __apple_build_version__ > 11000000
+#if defined(__apple_build_version__) && __apple_build_version__ > 10000000
+#    define BOOST_ASIO_HAS_STD_STRING_VIEW 1
+#endif
+
+// libc++ workaround
+#if defined(_LIBCPP_VERSION) && _LIBCPP_VERSION >= 7000 && _LIBCPP_VERSION < 9000
 #    define BOOST_ASIO_HAS_STD_STRING_VIEW 1
 #endif
 
 #include <boost/asio/placeholders.hpp>
 #include <boost/asio/read.hpp>
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 
 
 #include "osc/OscOutboundPacketStream.h"
@@ -589,30 +594,47 @@ void sc_osc_handler::open_udp_socket(udp const& protocol, unsigned int port) {
 }
 
 bool sc_osc_handler::open_socket(int family, int type, int protocol, unsigned int port) {
-    if (protocol == IPPROTO_TCP) {
-        if (type != SOCK_STREAM)
-            return false;
+    try {
+        if (protocol == IPPROTO_TCP) {
+            if (type != SOCK_STREAM)
+                return false;
 
-        if (family == AF_INET)
-            open_tcp_acceptor(tcp::v4(), port);
-        else if (family == AF_INET6)
-            open_tcp_acceptor(tcp::v6(), port);
-        else
-            return false;
-        return true;
-    } else if (protocol == IPPROTO_UDP) {
-        if (type != SOCK_DGRAM)
-            return false;
+            if (family == AF_INET)
+                open_tcp_acceptor(tcp::v4(), port);
+            else if (family == AF_INET6)
+                open_tcp_acceptor(tcp::v6(), port);
+            else
+                return false;
+            return true;
+        } else if (protocol == IPPROTO_UDP) {
+            if (type != SOCK_DGRAM)
+                return false;
 
-        if (family == AF_INET)
-            open_udp_socket(udp::v4(), port);
-        else if (family == AF_INET6)
-            open_udp_socket(udp::v6(), port);
-        else
-            return false;
-        start_receive_udp();
-        return true;
+            if (family == AF_INET)
+                open_udp_socket(udp::v4(), port);
+            else if (family == AF_INET6)
+                open_udp_socket(udp::v6(), port);
+            else
+                return false;
+            start_receive_udp();
+            return true;
+        }
+    } catch (const boost::system::system_error& exc) {
+        // Special verbose message to help with common issue. Issue #3969
+        if (exc.code() == boost::system::errc::address_in_use) {
+            std::cout << "\n*** ERROR: failed to open " << (protocol == IPPROTO_TCP ? "TCP" : "UDP")
+                      << " socket: address in use.\n"
+                         "This could be because another instance of supernova is already using it.\n"
+                         "You can use SuperCollider (sclang) to kill all running servers by running `Server.killAll`.\n"
+                         "You can also kill supernova using a terminal or your operating system's task manager."
+                      << std::endl;
+            std::exit(1);
+        }
+
+        // Allow other exceptions to propagate upward so they can be caught and printed in main.
+        throw;
     }
+
     return false;
 }
 
@@ -634,7 +656,7 @@ void sc_osc_handler::handle_receive_udp(const boost::system::error_code& error, 
         return;
     }
 
-    handle_packet_async(recv_buffer_.begin(), bytes_transferred, make_shared<udp_endpoint>(udp_remote_endpoint_));
+    handle_packet_async(recv_buffer_.data(), bytes_transferred, make_shared<udp_endpoint>(udp_remote_endpoint_));
 
     start_receive_udp();
     return;
@@ -737,7 +759,7 @@ void sc_osc_handler::tcp_connection::handle_message() {
 
 
 void sc_osc_handler::start_tcp_accept(void) {
-    tcp_connection::pointer new_connection = tcp_connection::create(tcp_acceptor_.get_io_service());
+    tcp_connection::pointer new_connection = tcp_connection::create(tcp_acceptor_.get_executor());
 
     tcp_acceptor_.async_accept(
         new_connection->socket(),
@@ -974,7 +996,7 @@ template <bool realtime> void handle_version(endpoint_ptr const& endpoint_ref) {
 
         osc::OutboundPacketStream p(buffer, 4096);
         p << osc::BeginMessage("/version.reply") << "supernova" << (i32)SC_VersionMajor << (i32)SC_VersionMinor
-          << SC_VersionPatch << SC_Branch << SC_CommitHash << osc::EndMessage;
+          << SC_VersionPostfix << SC_Branch << SC_CommitHash << osc::EndMessage;
         endpoint->send(p.Data(), p.Size());
     });
 }
@@ -1816,9 +1838,9 @@ template <bool realtime> void handle_s_getn(ReceivedMessage const& msg, size_t m
         ++local; /* skip control */
         if (local == msg.ArgumentsEnd())
             break;
-        if (!it->IsInt32())
+        if (!local->IsInt32())
             throw std::runtime_error("invalid count");
-        argument_count += it->AsInt32Unchecked();
+        argument_count += local->AsInt32Unchecked();
     }
 
     size_t alloc_size = msg_size + sizeof(float) * (argument_count) + 128;

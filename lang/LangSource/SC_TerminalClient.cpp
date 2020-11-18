@@ -29,7 +29,7 @@
 #    include "../../QtCollider/LanguageClient.h"
 #endif
 
-#include <boost/bind.hpp>
+#include <boost/bind/bind.hpp>
 
 #ifdef _WIN32
 #    define __GNU_LIBRARY__
@@ -62,6 +62,8 @@
 #include "SC_Version.hpp"
 
 #include <boost/filesystem/operations.hpp>
+
+using namespace boost::placeholders;
 
 static FILE* gPostDest = stdout;
 
@@ -231,7 +233,7 @@ int SC_TerminalClient::run(int argc, char** argv) {
     }
 
     // finish argv processing
-    const char* codeFile = 0;
+    const char* codeFile = nullptr;
 
     if (argc > 0) {
         codeFile = argv[0];
@@ -489,7 +491,7 @@ int SC_TerminalClient::readlineRecompile(int i1, int i2) {
 void SC_TerminalClient::readlineCmdLine(char* cmdLine) {
     SC_TerminalClient* client = static_cast<SC_TerminalClient*>(instance());
 
-    if (cmdLine == NULL) {
+    if (cmdLine == nullptr) {
         postfl("\nExiting sclang (ctrl-D)\n");
         client->onQuit(0);
         return;
@@ -525,7 +527,7 @@ void SC_TerminalClient::readlineInit() {
     struct sigaction sact;
     memset(&sact, 0, sizeof(struct sigaction));
     sact.sa_handler = &sc_rl_signalhandler;
-    sigaction(SIGINT, &sact, 0);
+    sigaction(SIGINT, &sact, nullptr);
 #    endif
 }
 
@@ -588,6 +590,17 @@ void SC_TerminalClient::inputThreadFn() {
 #if HAVE_READLINE
     if (mUseReadline)
         readlineInit();
+#endif
+
+#ifdef _WIN32
+    // make sure there's nothing on stdin before we launch the service
+    // this fixes #4214
+    DWORD bytesRead = 0;
+    auto success = ReadFile(GetStdHandle(STD_INPUT_HANDLE), inputBuffer.data(), inputBuffer.size(), &bytesRead, NULL);
+
+    if (success) {
+        pushCmdLine(inputBuffer.data(), bytesRead);
+    }
 #endif
 
     startInputRead();
@@ -701,7 +714,7 @@ int SC_TerminalClient::prRecompile(struct VMGlobals*, int) {
 
 SCLANG_DLLEXPORT SC_LanguageClient* createLanguageClient(const char* name) {
     if (SC_LanguageClient::instance())
-        return NULL;
+        return nullptr;
 
 #ifdef __APPLE__
     SC::Apple::disableAppNap();

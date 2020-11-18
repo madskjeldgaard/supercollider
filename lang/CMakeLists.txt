@@ -36,6 +36,7 @@ endif ()
 
 set(sclang_sources
     LangPrimSource/SC_LinkClock.cpp
+    LangPrimSource/SC_AudioDevicePrim.cpp
 	LangPrimSource/PyrSignalPrim.cpp
 	LangPrimSource/PyrSched.cpp
 	LangPrimSource/PyrPrimitive.cpp
@@ -104,11 +105,39 @@ list(APPEND sclang_sources ${headers} ${external_headers}) # make qt creator hap
 
 set(sclang_parser_source LangSource/Bison/lang11d_tab.cpp)
 
+# audio API for listing devices, selected the same way as in the server
+if(AUDIOAPI STREQUAL "default")
+    if(APPLE)
+        set(AUDIOAPI coreaudio)
+    elseif(WIN32)
+        set(AUDIOAPI portaudio)
+    else()
+        set(AUDIOAPI jack)
+    endif(APPLE)
+endif()
+
+if(NOT AUDIOAPI MATCHES "^(jack|coreaudio|portaudio)$")
+    message(FATAL_ERROR "Unrecognised audio API: ${AUDIOAPI}")
+endif()
+
+if (AUDIOAPI STREQUAL coreaudio)
+    add_definitions("-DSC_AUDIO_API_COREAUDIO")
+elseif (AUDIOAPI STREQUAL portaudio)
+    if (SYSTEM_PORTAUDIO)
+        find_package(Portaudio)
+        if(NOT PORTAUDIO_FOUND)
+            message(FATAL_ERROR "Portaudio selected as audio API, but development files not found")
+        endif()
+    endif()
+    add_definitions("-DSC_AUDIO_API_PORTAUDIO")
+    list(APPEND sclang_sources ${CMAKE_SOURCE_DIR}/common/SC_PaUtils.cpp)
+    include_directories(${PORTAUDIO_INCLUDE_DIRS})
+endif()
+
 if(UNIX)
 	if(APPLE)
 		list(APPEND sclang_sources
 			LangPrimSource/SC_CoreMIDI.cpp
-			LangPrimSource/SC_CoreAudioPrim.cpp
 			)
 	else(APPLE)
 		if(ALSA_FOUND)
@@ -223,7 +252,12 @@ endif()
 
 if (SC_ABLETON_LINK)
 	message(STATUS "Compiling with Ableton Link support")
-	include(../external_libraries/link/AbletonLinkConfig.cmake)
+	if(SYSTEM_ABLETON_LINK)
+		find_package(AbletonLink NAMES AbletonLink ableton-link link REQUIRED)
+	else()
+		include(../external_libraries/link/AbletonLinkConfig.cmake)
+	endif()
+
 	target_link_libraries(libsclang Ableton::Link)
 
 	add_definitions(-DSC_ABLETON_LINK)
@@ -231,10 +265,18 @@ endif()
 
 ## external libraries
 if(READLINE_FOUND)
-	message(STATUS "Compiling with Readline support")
-	target_compile_definitions(libsclang PUBLIC HAVE_READLINE)
-	target_include_directories(libsclang PUBLIC ${READLINE_INCLUDE_DIR})
-	target_link_libraries(libsclang ${READLINE_LIBRARY})
+    message(STATUS "Compiling with Readline support")
+    # Some Linuxes require linking against ncurses as well as libreadline, because libtermcap provides
+    # the same API and so could be used instead. Since ncurses is widely available and usually installed
+    # already, we simply require it on all Linuxes. See #4899.
+    if(CMAKE_SYSTEM_NAME MATCHES "Linux")
+        set(CURSES_NEED_NCURSES 1)
+        find_package(Curses REQUIRED)
+        target_link_libraries(libsclang ${CURSES_LIBRARIES})
+    endif()
+    target_compile_definitions(libsclang PUBLIC HAVE_READLINE)
+    target_include_directories(libsclang PUBLIC ${READLINE_INCLUDE_DIR})
+    target_link_libraries(libsclang ${READLINE_LIBRARY})
 endif(READLINE_FOUND)
 mark_as_advanced(READLINE_INCLUDE_DIR READLINE_LIBRARY)
 
@@ -252,6 +294,10 @@ if(ALSA_FOUND)
 	target_compile_definitions(libsclang PUBLIC HAVE_ALSA=1)
 	target_link_libraries(libsclang ${ALSA_LIBRARY})
 endif(ALSA_FOUND)
+
+if (AUDIOAPI STREQUAL portaudio)
+    target_link_libraries(libsclang ${PORTAUDIO_LIBRARIES})
+endif()
 
 if(SNDFILE_FOUND)
 	target_include_directories(libsclang PUBLIC ${SNDFILE_INCLUDE_DIR})
